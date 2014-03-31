@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+        html,
+        body,
+        #map-canvas {
+            height: 100%;
+            margin: 0px;
+            padding: 0px
+        }
+        .controls {
+            margin-top: 16px;
+            border: 1px solid transparent;
+            border-radius: 2px 0 0 2px;
+            box-sizing: border-box;
+            -moz-box-sizing: border-box;
+            height: 32px;
+            outline: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        #pac-input {
+            background-color: #fff;
+            padding: 0 11px 0 13px;
+            width: 400px;
+            font-family: Roboto;
+            font-size: 15px;
+            font-weight: 300;
+            text-overflow: ellipsis;
+        }
+        #pac-input:focus {
+            border-color: #4d90fe;
+            margin-left: -1px;
+            padding-left: 14px;
+            /* Regular padding-left + 1. */
+            width: 401px;
+        }
+        .pac-container {
+            font-family: Roboto;
+        }
+        #type-selector {
+            color: #fff;
+            background-color: #4d90fe;
+            padding: 5px 11px 0px 11px;
+        }
+        #type-selector label {
+            font-family: Roboto;
+            font-size: 13px;
+            font-weight: 300;
+        }
+    }
+    </style>
+    <title>Places search box</title>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=places"></script>
+    <script>
+        var map;
+        var markersArray = [];
+        var geocoder, location1, location2, gDir;
+
+
+        function initialize() {
+
+
+            geocoder = new google.maps.Geocoder();
+            var markers = [];
+            var map = new google.maps.Map(document.getElementById('map-canvas'), {
+                mapTypeId: google.maps.MapTypeId.ROADMAP,
+
+            });
+
+
+
+
+            google.maps.event.addListener(map, "click", function (event) {
+
+                var origin1 = new google.maps.LatLng(event.latLng.lat(), event.latLng.lng());
+                var destinationB = new google.maps.LatLng(17.459247, 78.372935);
+                // place a marker
+                calculateDistances();
+                placeMarker(event.latLng);
+                // display the lat/lng in your form's lat/lng fields
+                document.getElementById("latFld").value = event.latLng.lat();
+                document.getElementById("lngFld").value = event.latLng.lng();
+
+
+
+
+                function calculateDistances() {
+                    var service = new google.maps.DistanceMatrixService();
+                    service.getDistanceMatrix({
+                        origins: [origin1],
+                        destinations: [destinationB],
+                        travelMode: google.maps.TravelMode.DRIVING,
+                        unitSystem: google.maps.UnitSystem.METRIC,
+                        avoidHighways: false,
+                        avoidTolls: false
+                    }, callback);
+                }
+
+                function callback(response, status) {
+                    if (status != google.maps.DistanceMatrixStatus.OK) {
+                        alert('Error was: ' + status);
+                    } else {
+                        var origins = response.originAddresses;
+                        var destinations = response.destinationAddresses;
+                        var outputdiv = document.getElementById('outputdiv');
+                        outputdiv.value = '';
+                        deleteOverlays();
+
+                        for (var i = 0; i < origins.length; i++) {
+                            var results = response.rows[i].elements;
+
+                            for (var j = 0; j < results.length; j++) {
+
+                                document.getElementById('outputdiv').value += origins[i] + "..." + results[j].distance.text + "..." + " From google Office" + '<br>';
+                            }
+                        }
+                    }
+                }
+
+
+
+                function deleteOverlays() {
+                    if (markersArray.length > 2) {
+
+                        for (var i = 0; i < markersArray.length; i++) {
+                            markersArray[i].setMap(null);
+                        }
+                        markersArray = [];
+                    }
+
+                }
+
+
+
+
+            });
+
+
+
+
+            var defaultBounds = new google.maps.LatLngBounds(
+                new google.maps.LatLng(17.388648, 78.485532),
+                new google.maps.LatLng(17.8, 78.9));
+            map.fitBounds(defaultBounds);
+
+            // Create the search box and link it to the UI element.
+            var input = /** @type {HTMLInputElement} */ (
+                document.getElementById('pac-input'));
+            map.controls[google.maps.ControlPosition.TOP_LEFT].push(input);
+
+            var searchBox = new google.maps.places.SearchBox(
+                /** @type {HTMLInputElement} */
+                (input));
+
+            // [START region_getplaces]
+            // Listen for the event fired when the user selects an item from the
+            // pick list. Retrieve the matching places for that item.
+            google.maps.event.addListener(searchBox, 'places_changed', function () {
+                var places = searchBox.getPlaces();
+
+                for (var i = 0, marker; marker = markers[i]; i++) {
+                    marker.setMap(null);
+                }
+
+                // For each place, get the icon, place name, and location.
+                markers = [];
+                var bounds = new google.maps.LatLngBounds();
+                for (var i = 0, place; place = places[i]; i++) {
+                    var image = {
+                        url: place.icon,
+                        size: new google.maps.Size(71, 71),
+                        origin: new google.maps.Point(0, 0),
+                        anchor: new google.maps.Point(17, 34),
+                        scaledSize: new google.maps.Size(25, 25)
+                    };
+
+
+
+                    bounds.extend(place.geometry.location);
+                }
+
+                map.fitBounds(bounds);
+            });
+            // [END region_getplaces]
+
+            // Bias the SearchBox results towards places that are within the bounds of the
+            // current map's viewport.
+            google.maps.event.addListener(map, 'bounds_changed', function () {
+                var bounds = map.getBounds();
+                searchBox.setBounds(bounds);
+            });
+
+
+            function placeMarker(location) {
+                // first remove all markers if there are any
+                deleteOverlays();
+
+                var marker = new google.maps.Marker({
+                    position: location,
+                    map: map
+                });
+
+                // add marker in markers array
+                markersArray.push(marker);
+
+                //map.setCenter(location);
+            }
+
+            // Deletes all markers in the array by removing references to them
+            function deleteOverlays() {
+                if (markersArray) {
+                    for (i in markersArray) {
+                        markersArray[i].setMap(null);
+                    }
+                    markersArray.length = 0;
+                }
+            }
+        }
+    </script>
+    <style>
+        #target {
+            width: 345px;
+        }
+    </style>
+</head>
+
+<body onload="initialize()">
+
+
+    <form action="/dis/" onsubmit="calculateDistances()" method="post">
+        {% csrf_token %}
+        <input type="text" id="latFld" name="latFld">
+        <input type="text" id="lngFld" name="lngFld">
+        <input type="hidden" id="outputdiv" name="outputdiv">
+
+        <input type="submit" value="Submit">
+
+    </form>
+    <input id="pac-input" class="controls" type="text" placeholder="Search Box">
+    <div id="map-canvas"></div>
+</body>
+
+</html>
